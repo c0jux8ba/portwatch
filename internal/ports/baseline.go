@@ -3,58 +3,67 @@ package ports
 import (
 	"encoding/json"
 	"os"
-	"time"
+	"sync"
 )
 
-// BaselineEntry records a port snapshot taken at a specific time.
-type BaselineEntry struct {
-	Ports     []int     `json:"ports"`
-	RecordedAt time.Time `json:"recorded_at"`
-}
-
-// Baseline persists and loads a reference port snapshot used to
-// suppress alerts on the very first scan (daemon startup).
+// Baseline holds the last-known set of open ports and optionally persists
+// it to disk so it survives process restarts.
 type Baseline struct {
+	mu   sync.RWMutex
+	data []int
 	path string
 }
 
 // NewBaseline creates a Baseline backed by the given file path.
+// Pass an empty string for an in-memory-only baseline.
 func NewBaseline(path string) *Baseline {
 	return &Baseline{path: path}
 }
 
-// Save writes the given port list as the current baseline.
-func (b *Baseline) Save(ports []int) error {
-	entry := BaselineEntry{
-		Ports:      ports,
-		RecordedAt: time.Now().UTC(),
+// Get returns the current baseline snapshot (nil if not yet set).
+func (b *Baseline) Get() []int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.data == nil {
+		return nil
 	}
-	data, err := json.MarshalIndent(entry, "", "  ")
+	out := make([]int, len(b.data))
+	copy(out, b.data)
+	return out
+}
+
+// Set updates the in-memory baseline and, if a path is configured,
+// persists it to disk.
+func (b *Baseline) Set(ports []int) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.data = make([]int, len(ports))
+	copy(b.data, ports)
+	if b.path == "" {
+		return nil
+	}
+	return b.save()
+}
+
+// Load reads a previously persisted baseline from disk.
+// Returns nil without error if the file does not exist.
+func (b *Baseline) Load() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	raw, err := os.ReadFile(b.path)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(b.path, data, 0o644)
+	return json.Unmarshal(raw, &b.data)
 }
 
-// Load reads the persisted baseline. Returns nil, nil if the file does
-// not exist yet (first run).
-func (b *Baseline) Load() (*BaselineEntry, error) {
-	data, err := os.ReadFile(b.path)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+func (b *Baseline) save() error {
+	raw, err := json.Marshal(b.data)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var entry BaselineEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
-		return nil, err
-	}
-	return &entry, nil
-}
-
-// Exists reports whether a baseline file has been saved.
-func (b *Baseline) Exists() bool {
-	_, err := os.Stat(b.path)
-	return err == nil
+	return os.WriteFile(b.path, raw, 0o644)
 }
