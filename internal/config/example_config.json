@@ -1,0 +1,10 @@
+{
+  "port_range": {
+    "start": 1,
+    "end": 65535
+  },
+  "interval": "30s",
+  "webhook_url": "",
+  "desktop_notify": true,
+  "app_name": "portwatch"
+}
