@@ -1,70 +1,69 @@
 package ports
 
 import (
-	"bufio"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
 )
 
-// ProcessInfo holds metadata about the process bound to a port.
+// ProcessInfo holds information about a process listening on a port.
 type ProcessInfo struct {
 	Port int
 	PID  int
 	Name string
 }
 
-// ProcessResolver looks up which process is listening on a given port.
-type ProcessResolver struct{}
+// ProcessResolver resolves which process owns each open port via lsof.
+type ProcessResolver struct {
+	runner func() (string, error)
+}
 
-// NewProcessResolver creates a new ProcessResolver.
+// NewProcessResolver returns a ProcessResolver that calls lsof.
 func NewProcessResolver() *ProcessResolver {
-	return &ProcessResolver{}
+	return &ProcessResolver{runner: runLSOF}
 }
 
-// Lookup returns ProcessInfo for the given port, or nil if not found or unsupported.
-func (r *ProcessResolver) Lookup(port int) *ProcessInfo {
-	out, err := runLSOF(port)
+// Resolve returns a slice of ProcessInfo for all listening TCP ports.
+func (p *ProcessResolver) Resolve() ([]ProcessInfo, error) {
+	out, err := p.runner()
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("lsof: %w", err)
 	}
-	return parseLSOFOutput(port, out)
+	return parseLSOFOutput(out), nil
 }
 
-// runLSOF executes lsof for the given port and returns its output.
-func runLSOF(port int) (string, error) {
-	cmd := exec.Command("lsof", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-n", "-P")
-	out, err := cmd.Output()
+func runLSOF() (string, error) {
+	out, err := exec.Command("lsof", "-iTCP", "-sTCP:LISTEN", "-Pn").Output()
 	if err != nil {
-		return "", fmt.Errorf("lsof failed: %w", err)
+		return "", err
 	}
 	return string(out), nil
 }
 
-// parseLSOFOutput parses lsof output and extracts the first matching process.
-func parseLSOFOutput(port int, output string) *ProcessInfo {
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		line := scanner.Text()
+func parseLSOFOutput(output string) []ProcessInfo {
+	var result []ProcessInfo
+	lines := strings.Split(output, "\n")
+	for _, line := range lines[1:] {
 		fields := strings.Fields(line)
-		// lsof columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
-		if len(fields) < 2 {
+		if len(fields) < 9 {
 			continue
 		}
 		name := fields[0]
-		if strings.EqualFold(name, "COMMAND") {
-			continue // header
-		}
 		pid, err := strconv.Atoi(fields[1])
 		if err != nil {
 			continue
 		}
-		return &ProcessInfo{
-			Port: port,
-			PID:  pid,
-			Name: name,
+		addr := fields[8]
+		colon := strings.LastIndex(addr, ":")
+		if colon < 0 {
+			continue
 		}
+		port, err := strconv.Atoi(addr[colon+1:])
+		if err != nil {
+			continue
+		}
+		result = append(result, ProcessInfo{Port: port, PID: pid, Name: name})
 	}
-	return nil
+	return result
 }
