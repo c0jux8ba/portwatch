@@ -1,50 +1,43 @@
 package notify
 
-import (
-	"fmt"
+import "github.com/user/portwatch/internal/ports"
 
-	"github.com/user/portwatch/internal/ports"
-)
-
-// Notifier is the common interface for all alerting backends.
+// Notifier is the common interface for all alert back-ends.
 type Notifier interface {
 	Notify(diff ports.Diff) error
 }
 
-// Multi fans a single Diff out to multiple Notifier implementations.
-// Errors from individual notifiers are collected and returned together.
-type Multi struct {
+// multi fans out to multiple notifiers.
+type multi struct {
 	notifiers []Notifier
 }
 
-// NewMulti creates a Multi notifier wrapping the provided notifiers.
-func NewMulti(notifiers ...Notifier) *Multi {
-	return &Multi{notifiers: notifiers}
-}
-
-// Notify calls every registered notifier and collects errors.
-func (m *Multi) Notify(diff ports.Diff) error {
-	var errs []error
-	for _, n := range m.notifiers {
-		if err := n.Notify(diff); err != nil {
-			errs = append(errs, err)
+// NewMulti returns a Notifier that forwards to all provided notifiers.
+// Errors from individual notifiers are collected but do not stop others.
+func NewMulti(nn ...Notifier) Notifier {
+	filtered := make([]Notifier, 0, len(nn))
+	for _, n := range nn {
+		if n != nil {
+			filtered = append(filtered, n)
 		}
 	}
-	if len(errs) == 0 {
-		return nil
-	}
-	return &MultiError{Errors: errs}
+	return &multi{notifiers: filtered}
 }
 
-// MultiError aggregates errors from multiple notifiers.
-type MultiError struct {
-	Errors []error
+func (m *multi) Notify(diff ports.Diff) error {
+	var last error
+	for _, n := range m.notifiers {
+		if err := n.Notify(diff); err != nil {
+			last = err
+		}
+	}
+	return last
 }
 
-func (e *MultiError) Error() string {
-	msg := fmt.Sprintf("%d notifier(s) failed:", len(e.Errors))
-	for i, err := range e.Errors {
-		msg += fmt.Sprintf(" [%d] %s", i+1, err.Error())
-	}
-	return msg
-}
+// noop is a no-operation notifier used when no back-ends are configured.
+type noop struct{}
+
+func (noop) Notify(_ ports.Diff) error { return nil }
+
+// NewNoop returns a Notifier that silently discards all events.
+func NewNoop() Notifier { return noop{} }
