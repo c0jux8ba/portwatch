@@ -4,89 +4,81 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "portwatch-*.json")
-	if err != nil {
-		t.Fatalf("creating temp file: %v", err)
+	p := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := f.WriteString(content); err != nil {
-		t.Fatalf("writing temp file: %v", err)
-	}
-	f.Close()
-	return f.Name()
+	return p
 }
 
 func TestLoadMissingFileReturnsDefault(t *testing.T) {
-	cfg, err := Load(filepath.Join(t.TempDir(), "nonexistent.json"))
+	cfg, err := Load("/nonexistent/path/config.json")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("expected no error, got %v", err)
 	}
-	if cfg.PortRange.Start != 1 || cfg.PortRange.End != 65535 {
-		t.Errorf("unexpected default port range: %+v", cfg.PortRange)
-	}
-	if cfg.Interval.Duration != 30*time.Second {
-		t.Errorf("unexpected default interval: %v", cfg.Interval.Duration)
+	def := DefaultConfig()
+	if cfg.IntervalSeconds != def.IntervalSeconds {
+		t.Errorf("expected default interval %d, got %d", def.IntervalSeconds, cfg.IntervalSeconds)
 	}
 }
 
 func TestLoadValidConfig(t *testing.T) {
-	raw := `{"port_range":{"start":1024,"end":9000},"interval":"1m","webhook_url":"http://example.com","desktop_notify":false}`
-	path := writeTemp(t, raw)
-
-	cfg, err := Load(path)
+	p := writeTemp(t, `{"port_range_start":1024,"port_range_end":2048,"interval_seconds":10,"history_max_len":50}`)
+	cfg, err := Load(p)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.PortRange.Start != 1024 || cfg.PortRange.End != 9000 {
-		t.Errorf("unexpected port range: %+v", cfg.PortRange)
+	if cfg.PortRangeStart != 1024 {
+		t.Errorf("expected 1024, got %d", cfg.PortRangeStart)
 	}
-	if cfg.Interval.Duration != time.Minute {
-		t.Errorf("unexpected interval: %v", cfg.Interval.Duration)
-	}
-	if cfg.WebhookURL != "http://example.com" {
-		t.Errorf("unexpected webhook_url: %v", cfg.WebhookURL)
-	}
-	if cfg.DesktopNotify {
-		t.Error("expected desktop_notify to be false")
+	if cfg.HistoryMaxLen != 50 {
+		t.Errorf("expected history_max_len 50, got %d", cfg.HistoryMaxLen)
 	}
 }
 
 func TestLoadInvalidJSON(t *testing.T) {
-	path := writeTemp(t, `{not valid json}`)
-	_, err := Load(path)
+	p := writeTemp(t, `{not valid json`)
+	_, err := Load(p)
 	if err == nil {
-		t.Fatal("expected error for invalid JSON")
+		t.Error("expected error for invalid JSON")
 	}
 }
 
 func TestValidatePortRangeInverted(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.PortRange = PortRange{Start: 9000, End: 1024}
+	cfg.PortRangeStart = 9000
+	cfg.PortRangeEnd = 1000
 	if err := cfg.Validate(); err == nil {
-		t.Error("expected validation error for inverted port range")
+		t.Error("expected validation error for inverted range")
 	}
 }
 
-func TestValidateNegativeInterval(t *testing.T) {
+func TestValidateIntervalZero(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.Interval = Duration{-time.Second}
+	cfg.IntervalSeconds = 0
 	if err := cfg.Validate(); err == nil {
-		t.Error("expected validation error for negative interval")
+		t.Error("expected error for zero interval")
 	}
 }
 
-func TestDurationRoundTrip(t *testing.T) {
-	raw := `{"interval":"45s"}`
-	path := writeTemp(t, raw)
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestValidateHistoryMaxLenZero(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.HistoryMaxLen = 0
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for zero history_max_len")
 	}
-	if cfg.Interval.Duration != 45*time.Second {
-		t.Errorf("expected 45s, got %v", cfg.Interval.Duration)
+}
+
+func TestDefaultHistoryFields(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.HistoryFile == "" {
+		t.Error("expected non-empty default HistoryFile")
+	}
+	if cfg.HistoryMaxLen <= 0 {
+		t.Errorf("expected positive default HistoryMaxLen, got %d", cfg.HistoryMaxLen)
 	}
 }
