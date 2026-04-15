@@ -1,62 +1,53 @@
 package ports
 
-// Diff represents changes between two port snapshots.
+import (
+	"fmt"
+	"sort"
+)
+
+// Diff holds the result of comparing two port snapshots.
 type Diff struct {
-	Opened []PortState
-	Closed []PortState
+	Opened []int
+	Closed []int
 }
 
-// HasChanges returns true when at least one port opened or closed.
-func (d *Diff) HasChanges() bool {
-	return len(d.Opened) > 0 || len(d.Closed) > 0
+// IsEmpty returns true when no ports changed.
+func (d Diff) IsEmpty() bool {
+	return len(d.Opened) == 0 && len(d.Closed) == 0
 }
 
-// Compare calculates which ports opened or closed between prev and curr.
-func Compare(prev, curr *Snapshot) *Diff {
-	prevSet := toSet(prev.Ports)
-	currSet := toSet(curr.Ports)
+// Compare returns a Diff between the previous and current port sets.
+func Compare(previous, current []int) Diff {
+	prev := toSet(previous)
+	curr := toSet(current)
 
-	var opened, closed []PortState
+	var opened, closed []int
 
-	for key, state := range currSet {
-		if _, existed := prevSet[key]; !existed {
-			opened = append(opened, state)
+	for p := range curr {
+		if !prev[p] {
+			opened = append(opened, p)
+		}
+	}
+	for p := range prev {
+		if !curr[p] {
+			closed = append(closed, p)
 		}
 	}
 
-	for key, state := range prevSet {
-		if _, exists := currSet[key]; !exists {
-			closed = append(closed, state)
-		}
-	}
+	sort.Ints(opened)
+	sort.Ints(closed)
 
-	return &Diff{
-		Opened: opened,
-		Closed: closed,
-	}
+	return Diff{Opened: opened, Closed: closed}
 }
 
-// toSet converts a slice of PortState into a map keyed by "proto:port".
-func toSet(ports []PortState) map[string]PortState {
-	m := make(map[string]PortState, len(ports))
+func toSet(ports []int) map[int]bool {
+	s := make(map[int]bool, len(ports))
 	for _, p := range ports {
-		key := p.Protocol + ":" + itoa(p.Port)
-		m[key] = p
+		s[p] = true
 	}
-	return m
+	return s
 }
 
-// itoa is a minimal int-to-string helper to avoid importing strconv.
 func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	buf := [10]byte{}
-	pos := len(buf)
-	for n > 0 {
-		pos--
-		buf[pos] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[pos:])
+	return fmt.Sprintf("%d", n)
 }
