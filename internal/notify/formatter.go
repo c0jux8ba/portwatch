@@ -2,55 +2,70 @@ package notify
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/user/portwatch/internal/ports"
 )
 
-// Formatter enriches a Diff with human-readable service names using a
-// ports.Resolver. It is used by notifiers to produce richer alert messages.
+// Formatter builds human-readable alert messages from a port Diff.
 type Formatter struct {
-	resolver *ports.Resolver
+	hostname string
 }
 
-// NewFormatter creates a Formatter backed by the given Resolver.
-// If resolver is nil a new default Resolver is created.
-func NewFormatter(resolver *ports.Resolver) *Formatter {
-	if resolver == nil {
-		resolver = ports.NewResolver()
+// NewFormatter creates a Formatter. If hostname is empty, the system
+// hostname is used as a fallback.
+func NewFormatter(hostname string) *Formatter {
+	if hostname == "" {
+		if h, err := os.Hostname(); err == nil {
+			hostname = h
+		} else {
+			hostname = "localhost"
+		}
 	}
-	return &Formatter{resolver: resolver}
+	return &Formatter{hostname: hostname}
 }
 
-// FormatOpened returns a human-readable line for newly opened ports.
-func (f *Formatter) FormatOpened(diff ports.Diff) string {
-	if len(diff.Opened) == 0 {
+// Format returns a formatted alert string for the given Diff.
+// Returns an empty string when the diff has no changes.
+func (f *Formatter) Format(diff ports.Diff) string {
+	if diff.IsEmpty() {
 		return ""
 	}
-	names := f.resolver.LookupAll(diff.Opened)
-	return fmt.Sprintf("opened: %s", strings.Join(names, ", "))
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("[portwatch] Port change detected on %s\n", f.hostname))
+
+	if len(diff.Opened) > 0 {
+		sb.WriteString(fmt.Sprintf("  Opened: %s\n", joinInts(diff.Opened)))
+	}
+	if len(diff.Closed) > 0 {
+		sb.WriteString(fmt.Sprintf("  Closed: %s\n", joinInts(diff.Closed)))
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
 }
 
-// FormatClosed returns a human-readable line for newly closed ports.
-func (f *Formatter) FormatClosed(diff ports.Diff) string {
-	if len(diff.Closed) == 0 {
-		return ""
+// Subject returns a short one-line summary suitable for webhook titles
+// or notification headings.
+func (f *Formatter) Subject(diff ports.Diff) string {
+	parts := []string{}
+	if len(diff.Opened) > 0 {
+		parts = append(parts, fmt.Sprintf("%d opened", len(diff.Opened)))
 	}
-	names := f.resolver.LookupAll(diff.Closed)
-	return fmt.Sprintf("closed: %s", strings.Join(names, ", "))
-}
-
-// FormatSummary returns a multi-line summary of all changes in the diff.
-func (f *Formatter) FormatSummary(diff ports.Diff) string {
-	var parts []string
-	if line := f.FormatOpened(diff); line != "" {
-		parts = append(parts, line)
-	}
-	if line := f.FormatClosed(diff); line != "" {
-		parts = append(parts, line)
+	if len(diff.Closed) > 0 {
+		parts = append(parts, fmt.Sprintf("%d closed", len(diff.Closed)))
 	}
 	if len(parts) == 0 {
-		return "no changes"
+		return ""
 	}
-	return strings.Join(parts, "\n")
+	return fmt.Sprintf("portwatch [%s]: %s", f.hostname, strings.Join(parts, ", "))
+}
+
+func joinInts(vals []int) string {
+	ss := make([]string, len(vals))
+	for i, v := range vals {
+		ss[i] = fmt.Sprintf("%d", v)
+	}
+	return strings.Join(ss, ", ")
 }
