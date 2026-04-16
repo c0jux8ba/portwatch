@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -61,15 +62,16 @@ func (g *RateGuard) Notify(d ports.Diff) error {
 
 // diffKey produces a stable string key representing the diff content.
 func diffKey(d ports.Diff) string {
-	opened := intsToStrings(d.Opened)
-	closed := intsToStrings(d.Closed)
-	key := "o:"
-	for _, p := range opened {
-		key += p + ","
+	var b strings.Builder
+	b.WriteString("o:")
+	for _, p := range d.Opened {
+		b.WriteString(intsToStrings([]int{p})[0])
+		b.WriteByte(',')
 	}
-	key += "c:"
-	for _, p := range closed {
-		key += p + ","
+	b.WriteString("c:")
+	for _, p := range d.Closed {
+		b.WriteString(intsToStrings([]int{p})[0])
+		b.WriteByte(',')
 	}
-	return key
+	return b.String()
 }
