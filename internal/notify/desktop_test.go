@@ -56,9 +56,23 @@ func TestBuildBodyBoth(t *testing.T) {
 	}
 }
 
+func TestBuildBodyEmpty(t *testing.T) {
+	body := buildBody(ports.Diff{})
+	if body != "" {
+		t.Errorf("expected empty string for empty diff, got %q", body)
+	}
+}
+
 func TestIntsToStrings(t *testing.T) {
 	result := intsToStrings([]int{22, 80, 443})
 	if len(result) != 3 || result[0] != "22" || result[1] != "80" || result[2] != "443" {
 		t.Errorf("unexpected result: %v", result)
+	}
+}
+
+func TestIntsToStringsEmpty(t *testing.T) {
+	result := intsToStrings([]int{})
+	if len(result) != 0 {
+		t.Errorf("expected empty slice, got %v", result)
 	}
 }
