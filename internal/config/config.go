@@ -5,45 +5,51 @@ import (
 	"os"
 )
 
-// Config holds the full portwatch configuration.
+// Config holds portwatch runtime configuration.
 type Config struct {
-	StartPort   int      `json:"start_port"`
-	EndPort     int      `json:"end_port"`
-	IntervalSec int      `json:"interval_sec"`
-	WebhookURL  string   `json:"webhook_url"`
-	SlackURL    string   `json:"slack_url"`
-	DesktopApp  string   `json:"desktop_app"`
-	Exclude     []string `json:"exclude"`
-	CooldownSec int      `json:"cooldown_sec"`
-	MaxHistory  int      `json:"max_history"`
+	IntervalSeconds  int      `json:"interval_seconds"`
+	PortRange        string   `json:"port_range"`
+	ExcludePorts     []int    `json:"exclude_ports"`
+	WebhookURL       string   `json:"webhook_url"`
+	SlackWebhookURL  string   `json:"slack_webhook_url"`
+	PagerDutyKey     string   `json:"pagerduty_key"`
+	EmailSMTP        string   `json:"email_smtp"`
+	EmailFrom        string   `json:"email_from"`
+	EmailTo          string   `json:"email_to"`
+	DesktopNotify    bool     `json:"desktop_notify"`
+	ConsoleNotify    bool     `json:"console_notify"`
+	ConsolePrefix    string   `json:"console_prefix"`
+	BaselinePath     string   `json:"baseline_path"`
+	HistoryPath      string   `json:"history_path"`
+	CooldownSeconds  int      `json:"cooldown_seconds"`
+	MaxHistoryLen    int      `json:"max_history_len"`
 }
 
-// DefaultConfig returns a Config populated with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		StartPort:   1,
-		EndPort:     65535,
-		IntervalSec: 30,
-		CooldownSec: 60,
-		MaxHistory:  100,
+		IntervalSeconds: 30,
+		PortRange:       "1-65535",
+		DesktopNotify:   false,
+		ConsoleNotify:   true,
+		ConsolePrefix:   "portwatch",
+		BaselinePath:    ".portwatch_baseline.json",
+		HistoryPath:     ".portwatch_history.json",
+		CooldownSeconds: 60,
+		MaxHistoryLen:   100,
 	}
 }
 
-// Load reads a JSON config file from path. Missing file returns DefaultConfig.
 func Load(path string) (Config, error) {
 	cfg := DefaultConfig()
-
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return cfg, nil
-	}
 	if err != nil {
+		if os.IsNotExist(err) {
+			return cfg, nil
+		}
 		return cfg, err
 	}
-
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return cfg, err
 	}
-
 	return cfg, nil
 }
