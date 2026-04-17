@@ -65,3 +65,18 @@ func TestEnricherPortInfoFields(t *testing.T) {
 		t.Errorf("expected empty process name, got %s", infos[0].Process)
 	}
 }
+
+func TestEnricherPortOrder(t *testing.T) {
+	r := NewResolver(nil)
+	e := NewEnricher(r, nil)
+	ports := []int{443, 22, 80}
+	infos := e.Enrich(ports)
+	if len(infos) != len(ports) {
+		t.Fatalf("expected %d infos, got %d", len(ports), len(infos))
+	}
+	for i, p := range ports {
+		if infos[i].Port != p {
+			t.Errorf("index %d: expected port %d, got %d", i, p, infos[i].Port)
+		}
+	}
+}
