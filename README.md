@@ -48,10 +48,14 @@ portwatch will scan open ports on the specified interval and send an alert whene
 | `--config` | `config.yaml` | Path to config file |
 | `--interval` | `30s` | Polling interval |
 | `--once` | `false` | Run a single scan and exit |
+| `--verbose` | `false` | Print all scanned ports, not just changes |
 
 ```bash
 # Run a one-time scan and print results
 portwatch --once
+
+# Run a one-time scan with full port output
+portwatch --once --verbose
 ```
 
 ---
