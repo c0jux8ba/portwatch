@@ -53,3 +53,12 @@ func Load(path string) (Config, error) {
 	}
 	return cfg, nil
 }
+
+// Save writes the configuration to the given file path as formatted JSON.
+func (c Config) Save(path string) error {
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
