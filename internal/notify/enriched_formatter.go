@@ -41,6 +41,11 @@ func (f *EnrichedFormatter) Format(d ports.Diff) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
+// HasChanges reports whether the diff contains any opened or closed ports.
+func (f *EnrichedFormatter) HasChanges(d ports.Diff) bool {
+	return len(d.Opened) > 0 || len(d.Closed) > 0
+}
+
 func formatLine(info ports.PortInfo) string {
 	base := fmt.Sprintf("    :%d (%s)", info.Port, info.Service)
 	if info.Process != "" {
