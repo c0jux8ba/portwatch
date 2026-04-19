@@ -76,3 +76,21 @@ func TestHistoryEventsReturnsCopy(t *testing.T) {
 		t.Error("Events() should return a copy, not a reference")
 	}
 }
+
+func TestHistoryRecordBothOpenedAndClosed(t *testing.T) {
+	p := tempHistoryPath(t)
+	h, _ := NewHistory(p, 10)
+	if err := h.Record([]int{8080, 9090}, []int{80, 443}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	events := h.Events()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if len(events[0].Opened) != 2 {
+		t.Errorf("expected 2 opened ports, got %d", len(events[0].Opened))
+	}
+	if len(events[0].Closed) != 2 {
+		t.Errorf("expected 2 closed ports, got %d", len(events[0].Closed))
+	}
+}
