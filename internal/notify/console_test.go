@@ -64,3 +64,14 @@ func TestConsoleNotifyBothDirections(t *testing.T) {
 		t.Errorf("expected 2 lines, got %d: %q", len(lines), out)
 	}
 }
+
+func TestConsoleNotifyPrefixAppearsInOutput(t *testing.T) {
+	var buf bytes.Buffer
+	const prefix = "myapp"
+	n := NewConsoleNotifier(prefix, &buf)
+	_ = n.Notify(ports.Diff{Opened: []int{3000}})
+	out := buf.String()
+	if !strings.Contains(out, prefix) {
+		t.Errorf("expected prefix %q in output, got %q", prefix, out)
+	}
+}
