@@ -36,3 +36,11 @@ func (d *DedupeNotifier) Notify(diff ports.Diff) error {
 
 	return d.inner.Notify(diff)
 }
+
+// Reset clears the stored last-seen key, so the next notification will always
+// be forwarded regardless of whether it matches a previously sent diff.
+func (d *DedupeNotifier) Reset() {
+	d.mu.Lock()
+	d.lastKey = ""
+	d.mu.Unlock()
+}
