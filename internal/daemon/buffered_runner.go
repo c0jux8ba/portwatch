@@ -48,3 +48,12 @@ func (r *BufferedRunner) Run() {
 func (r *BufferedRunner) Stop() {
 	close(r.stopCh)
 }
+
+// StopAndFlush stops the flush loop and performs one final flush to ensure
+// no buffered notifications are lost on shutdown.
+func (r *BufferedRunner) StopAndFlush() {
+	r.Stop()
+	if err := r.buffer.Flush(); err != nil {
+		log.Printf("buffered_runner: final flush error: %v", err)
+	}
+}
