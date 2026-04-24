@@ -74,3 +74,23 @@ func TestThrottleLastScanUpdated(t *testing.T) {
 		t.Fatalf("expected LastScan=%v, got %v", now, th.LastScan())
 	}
 }
+
+func TestThrottleLastScanNotUpdatedWhenBlocked(t *testing.T) {
+	base := time.Now()
+	calls := 0
+	clock := func() time.Time {
+		calls++
+		if calls == 1 {
+			return base
+		}
+		return base.Add(1 * time.Second) // still within the 5s gap
+	}
+	th := newThrottleWithClock(5*time.Second, clock)
+
+	th.Allow() // sets LastScan to base
+	th.Allow() // blocked — LastScan should remain base
+
+	if !th.LastScan().Equal(base) {
+		t.Fatalf("expected LastScan to remain %v when blocked, got %v", base, th.LastScan())
+	}
+}
