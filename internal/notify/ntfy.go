@@ -47,7 +47,7 @@ func (n *NtfyNotifier) Notify(diff ports.Diff) error {
 	}
 	req.Header.Set("Content-Type", "text/plain")
 	req.Header.Set("Title", fmt.Sprintf("portwatch alert on %s", n.hostname))
-	req.Header.Set("Priority", "high")
+	req.Header.Set("Priority", ntfyPriority(diff))
 	req.Header.Set("Tags", "warning,computer")
 
 	resp, err := n.client.Do(req)
@@ -60,6 +60,15 @@ func (n *NtfyNotifier) Notify(diff ports.Diff) error {
 		return fmt.Errorf("ntfy: unexpected status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// ntfyPriority returns "urgent" when new ports have been opened (higher security
+// concern), and "default" when only ports were closed.
+func ntfyPriority(diff ports.Diff) string {
+	if len(diff.Opened) > 0 {
+		return "urgent"
+	}
+	return "default"
 }
 
 func buildNtfyMessage(diff ports.Diff, hostname string) string {
